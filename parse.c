@@ -15,6 +15,8 @@ struct parse_ctx {
 	struct vector *tokens;
 };
 
+struct ast_node *expr(struct parse_ctx *ctx);
+
 int get_ast_height(struct ast_node *ast) {
 	if (ast == NULL)
 		return -1;
@@ -37,7 +39,7 @@ void print_ast(struct ast_node *ast, int indent) {
 }
 
 void err_abort(struct parse_ctx *ctx) {
-	printf("ERROR\n");
+	printf("ERROR next to\n");
 	exit(0);
 }
 
@@ -69,11 +71,18 @@ int consume(struct parse_ctx *ctx, uint64_t val) {
 }
 
 struct ast_node *factor(struct parse_ctx *ctx) {
-	struct token_node* node = vector_peek(ctx->tokens);
-	if (!consume(ctx, TK_INT)) {
+	struct token_node *node = vector_peek(ctx->tokens);
+	struct ast_node *res = NULL;
+	if (node->type == TK_LPAREN) {
+		if (consume(ctx, TK_LPAREN))
+			err_abort(ctx);
+		res = expr(ctx);
+		if (consume(ctx, TK_RPAREN))
+			err_abort(ctx);
+	} else if (!consume(ctx, TK_INT)) {
 		return make_ast_node(node, NULL, NULL);
 	}
-	return NULL;
+	return res;
 };
 
 struct ast_node *term_prime(struct parse_ctx *ctx,
@@ -81,7 +90,7 @@ struct ast_node *term_prime(struct parse_ctx *ctx,
 	struct ast_node *f, *tp, *res = left;
 	struct token_node *next = vector_peek(ctx->tokens);
 	while (next && next->type == TK_OP &&
-		(next->char_val == '*' || next->char_val == '/') && !consume(ctx, TK_OP))
+			(next->char_val == '*' || next->char_val == '/') && !consume(ctx, TK_OP))
 	{
 		f = factor(ctx);
 		if (f == NULL)
@@ -107,7 +116,7 @@ struct ast_node *expr_prime(struct parse_ctx *ctx,
 	struct ast_node *t, *ep, *res = left;
 	struct token_node *next = vector_peek(ctx->tokens);
 	while (next && next->type == TK_OP
-		&& (next->char_val == '+' || next->char_val == '-') && !consume(ctx, TK_OP))
+			&& (next->char_val == '+' || next->char_val == '-') && !consume(ctx, TK_OP))
 	{
 		t = term(ctx);
 		res = make_ast_node(next, res, t);

@@ -5,7 +5,7 @@
 
 //#define PAR_DBG 1
 
-enum token {TK_NON = 0x0, TK_IDENT = 0x1, TK_KEYW = 0x2, TK_INT = 0x4, TK_FLOAT = 0x8, TK_CHAR = 0x10, TK_STRING = 0x20, TK_OP = 0x40, TK_PUNC = 0x80};
+enum token {TK_NON = 0x0, TK_IDENT = 0x1, TK_KEYW = 0x2, TK_INT = 0x4, TK_FLOAT = 0x8, TK_CHAR = 0x10, TK_STRING = 0x20, TK_OP = 0x40, TK_PUNC = 0x80, TK_LPAREN = 0x100, TK_RPAREN = 0x200, TK_PARENS = 0x300};
 
 enum ast_type { AST_OP, AST_INT };
 
