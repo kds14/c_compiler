@@ -11,28 +11,8 @@
 
 enum parse_exp {P_NON = 0x0, P_IDENT = 0x1};
 
-enum ast_type { AST_OP, AST_INT };
-
 struct parse_ctx {
 	struct vector *tokens;
-};
-
-struct ast_node {
-	union {
-		struct {
-			void* data;
-			size_t size; 
-		};
-		struct {
-			char char_val; 
-		};
-		struct {
-			int int_val; 
-		};
-	};
-	enum ast_type type;
-	struct ast_node *left;
-	struct ast_node *right;
 };
 
 int get_ast_height(struct ast_node *ast) {
@@ -67,11 +47,9 @@ struct ast_node *make_ast_node(struct token_node* node,
 	if (node->type == TK_INT) {
 		res->type = AST_INT;
 		res->int_val = node->int_val;
-		printf("MAKE %d\n", res->int_val);
 	} else if (node->type == TK_OP) {
 		res->type = AST_OP;
 		res->char_val = node->char_val;
-		printf("MAKE %c\n", res->char_val);
 	}
 	res->left = left;
 	res->right = right;
@@ -105,7 +83,6 @@ struct ast_node *term_prime(struct parse_ctx *ctx,
 	while (next && next->type == TK_OP &&
 		(next->char_val == '*' || next->char_val == '/') && !consume(ctx, TK_OP))
 	{
-		printf("MULT\n");
 		f = factor(ctx);
 		if (f == NULL)
 			err_abort(ctx);
@@ -156,7 +133,10 @@ int parse(struct context *ctx) {
 	parse_ctx->tokens = ctx->tokens;
 	printf("\n\n");
 	struct ast_node *root = expr(parse_ctx);
+#ifdef PAR_DBG
 	printf("\n\n");
 	print_ast(root, 0);
+#endif
+	ctx->ast_root = root;
 	return 0;
 }

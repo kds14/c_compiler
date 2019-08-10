@@ -7,7 +7,9 @@ int main(int argc, char **argv) {
 	struct context *ctx = calloc(1, sizeof(struct context));
 	if (scan(ctx, fp) == -1)
 		printf("SCAN ERROR\n");
-	if (parse(ctx) == -1)
+	else if (parse(ctx) == -1)
 		printf("PARSE ERROR\n");
+	else if (out(ctx) == -1)
+		printf("OUTPUT ERROR\n");
 	return 0;
 }

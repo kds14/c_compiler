@@ -3,7 +3,12 @@
 #include <stdint.h>
 #include <string.h>
 
+//#define PAR_DBG 1
+
 enum token {TK_NON = 0x0, TK_IDENT = 0x1, TK_KEYW = 0x2, TK_INT = 0x4, TK_FLOAT = 0x8, TK_CHAR = 0x10, TK_STRING = 0x20, TK_OP = 0x40, TK_PUNC = 0x80};
+
+enum ast_type { AST_OP, AST_INT };
+
 
 struct token_node {
 	union {
@@ -22,8 +27,28 @@ struct token_node {
 	struct node *next;
 };
 
+struct ast_node {
+	union {
+		struct {
+			void* data;
+			size_t size; 
+		};
+		struct {
+			char char_val; 
+		};
+		struct {
+			int int_val; 
+		};
+	};
+	enum ast_type type;
+	struct ast_node *left;
+	struct ast_node *right;
+};
+
+
 struct context {
 	struct vector* tokens;
+	struct ast_node* ast_root;
 };
 
 struct vector {
@@ -47,3 +72,4 @@ void* vector_back(struct vector *v);
 
 int scan(struct context *ctx, FILE *fp);
 int parse(struct context *ctx);
+int out(struct context *ctx);
