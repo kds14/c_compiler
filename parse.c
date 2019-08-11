@@ -13,6 +13,8 @@ enum parse_exp {P_NON = 0x0, P_IDENT = 0x1};
 
 struct parse_ctx {
 	struct vector *tokens;
+	char **types;
+	size_t types_size;
 };
 
 struct ast_node *expr(struct parse_ctx *ctx);
@@ -28,14 +30,16 @@ int get_ast_height(struct ast_node *ast) {
 void print_ast(struct ast_node *ast, int indent) {
 	if (ast == NULL)
 		return;
-	print_ast(ast->left, indent + 8);
+	print_ast(ast->right, indent + 8);
 	for (int i = 0; i < indent; ++i)
 		printf(" ");
 	if (ast->type == AST_INT)
 		printf("%d\n", ast->int_val);
-	else if (ast->type == AST_OP)
+	else if (ast->type == AST_OP || ast->type == AST_ASS)
 		printf("%c\n", ast->char_val);
-	print_ast(ast->right, indent + 8);
+	else if (ast->type == AST_VAR)
+		printf("var:%s\n", ast->ident);
+	print_ast(ast->left, indent + 8);
 }
 
 void err_abort(struct parse_ctx *ctx) {
@@ -46,6 +50,16 @@ void err_abort(struct parse_ctx *ctx) {
 	exit(0);
 }
 
+struct ast_node *make_ast_var_node(enum var_type type, char* ident) {
+	struct ast_node* res = calloc(1, sizeof(struct ast_node));
+	res->vtype = type;
+	res->ident = ident;
+	res->type = AST_VAR;
+	res->left = NULL;
+	res->right = NULL;
+	return res;
+}
+
 struct ast_node *make_ast_node(struct token_node* node,
 		struct ast_node *left, struct ast_node *right) {
 	struct ast_node* res = calloc(1, sizeof(struct ast_node));
@@ -54,6 +68,9 @@ struct ast_node *make_ast_node(struct token_node* node,
 		res->int_val = node->int_val;
 	} else if (node->type == TK_OP) {
 		res->type = AST_OP;
+		res->char_val = node->char_val;
+	} else if (node->type == TK_ASS) {
+		res->type = AST_ASS;
 		res->char_val = node->char_val;
 	}
 	res->left = left;
@@ -118,8 +135,8 @@ struct ast_node *expr_prime(struct parse_ctx *ctx,
 		struct ast_node *left) {
 	struct ast_node *t, *ep, *res = left;
 	struct token_node *next = vector_peek(ctx->tokens);
-	while (next && next->type == TK_OP
-			&& (next->char_val == '+' || next->char_val == '-') && !consume(ctx, TK_OP))
+	while (next && next->type == TK_OP && (next->char_val == '+'
+		|| next->char_val == '-') && !consume(ctx, TK_OP))
 	{
 		t = term(ctx);
 		res = make_ast_node(next, res, t);
@@ -138,13 +155,48 @@ struct ast_node *expr(struct parse_ctx *ctx) {
 	return ep;
 }
 
+enum var_type get_type(struct parse_ctx* ctx, struct token_node *node) {
+	if (node->type != TK_TEXT)
+		return 0;
+	for (int i = 0; i < ctx->types_size; ++i) {
+		if (!strcmp(ctx->types[i], node->str_val)) {
+			return i + 1;
+		}
+	}
+	return 0;
+}
+
+struct ast_node *line(struct parse_ctx *ctx) {
+	struct token_node *next, *next2, *next3;
+	struct ast_node *res, *var;
+	next = vector_peek(ctx->tokens);
+	enum var_type type = get_type(ctx, next);
+	if (type) {
+		if (consume(ctx, TK_TEXT))
+			err_abort(ctx);
+		next2 = vector_peek(ctx->tokens);
+		if (consume(ctx, TK_TEXT))
+			err_abort(ctx);
+		next3 = vector_peek(ctx->tokens);
+		if (consume(ctx, TK_ASS))
+			err_abort(ctx);
+		var = make_ast_var_node(type, next2->str_val);
+		res = make_ast_node(next3, var, expr(ctx));
+	}
+	return res;
+}
+
 int parse(struct context *ctx) {
 	vector_reset(ctx->tokens);
 	struct token_node *node = NULL;
 	struct parse_ctx *parse_ctx = calloc(1, sizeof(parse_ctx));
+	parse_ctx->types_size = 1;
+	parse_ctx->types = calloc(parse_ctx->types_size, sizeof(char *));
+	parse_ctx->types[0] = "int";
+	
 	parse_ctx->tokens = ctx->tokens;
 	printf("\n\n");
-	struct ast_node *root = expr(parse_ctx);
+	struct ast_node *root = line(parse_ctx);
 #ifdef PAR_DBG
 	printf("\n\n");
 	print_ast(root, 0);

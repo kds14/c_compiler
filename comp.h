@@ -1,18 +1,23 @@
+#ifndef COMP_H
+#define COMP_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 
-//#define PAR_DBG 1
+#define PAR_DBG
 
 enum token {TK_NON = 0x0, TK_IDENT = 0x1, TK_KEYW = 0x2, TK_INT = 0x4,
 			TK_FLOAT = 0x8, TK_CHAR = 0x10, TK_STRING = 0x20,
 			TK_OP = 0x40, TK_PUNC = 0x80, TK_LPAREN = 0x100,
 			TK_RPAREN = 0x200, TK_PARENS = 0x300, TK_TYPE = 0x400,
-			TK_TEXT = (TK_IDENT | TK_KEYW | TK_TYPE),
+			TK_ASS = 0x800, TK_TEXT = (TK_IDENT | TK_KEYW | TK_TYPE),
 			TK_ALL = 0xFFFFFFFF};
 
-enum ast_type { AST_OP, AST_INT };
+enum ast_type { AST_OP, AST_INT, AST_ASS, AST_VAR };
+
+enum var_type { T_NON = 0, T_INT };
 
 struct token_node {
 	union {
@@ -39,6 +44,10 @@ void print_token(struct token_node *t);
 
 struct ast_node {
 	union {
+		struct {
+			char* ident;
+			enum var_type vtype;
+		};
 		struct {
 			void* data;
 			size_t size; 
@@ -102,3 +111,4 @@ void* ht_find(struct hashtable *ht, char* key);
 int scan(struct context *ctx, FILE *fp);
 int parse(struct context *ctx);
 int out(struct context *ctx);
+#endif

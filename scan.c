@@ -35,7 +35,7 @@ void scan_err(struct scan_ctx* ctx) {
 void print_token(struct token_node *t) {
 	if (t->type == TK_INT) {
 		printf("%d", t->int_val);
-	} else if ((t->type & (TK_OP | TK_PARENS))) {
+	} else if ((t->type & (TK_OP | TK_PARENS | TK_ASS))) {
 		printf("%c", t->char_val);
 	} else if (t->type == TK_TEXT) {
 		printf("%s", t->str_val);
@@ -70,8 +70,8 @@ void commit_token(struct scan_ctx *scan_ctx) {
 		case TK_LPAREN:
 		case TK_RPAREN:
 		case TK_OP:
-			scan_ctx->next->char_val =
-				((char *)scan_ctx->buff->buff)[0];	
+		case TK_ASS:
+			scan_ctx->next->char_val = ((char *)scan_ctx->buff->buff)[0];	
 			break;
 		case TK_TEXT:
 			val = calloc(len + 1, sizeof(char));
@@ -105,7 +105,7 @@ int scan(struct context *ctx, FILE *fp) {
 			if (scan_ctx->scan_state != TK_TEXT) {
 				commit_token(scan_ctx);
 			}
-			scan_ctx->possible = TK_TEXT | TK_INT;
+			scan_ctx->possible = TK_TEXT | TK_INT | TK_ASS;
 			scan_ctx->scan_state = TK_TEXT;
 			vector_push_back(scan_ctx->buff, &c);
 		} else if (c >= '0' && c <= '9') {
@@ -125,8 +125,17 @@ int scan(struct context *ctx, FILE *fp) {
 			if (scan_ctx->scan_state != TK_NON) {
 				commit_token(scan_ctx);
 			}
-			scan_ctx->possible = TK_INT | TK_LPAREN;
+			scan_ctx->possible = TK_INT | TK_LPAREN | TK_TEXT;
 			scan_ctx->scan_state = TK_OP;
+			vector_push_back(scan_ctx->buff, &c);
+		} else if (c == '=') {
+			if (!(scan_ctx->possible & TK_ASS))
+				scan_err(scan_ctx);
+			if (scan_ctx->scan_state != TK_NON) {
+				commit_token(scan_ctx);
+			}
+			scan_ctx->possible = TK_INT | TK_LPAREN | TK_TEXT;
+			scan_ctx->scan_state = TK_ASS;
 			vector_push_back(scan_ctx->buff, &c);
 		} else if (c == '(') {
 			if (!(scan_ctx->possible & TK_LPAREN))
@@ -135,7 +144,7 @@ int scan(struct context *ctx, FILE *fp) {
 				commit_token(scan_ctx);
 			}
 			scan_ctx->parens++;
-			scan_ctx->possible = TK_INT | TK_PARENS;
+			scan_ctx->possible = TK_INT | TK_PARENS | TK_TEXT;
 			scan_ctx->scan_state = TK_LPAREN;
 			vector_push_back(scan_ctx->buff, &c);
 		} else if (c == ')') {
@@ -148,7 +157,7 @@ int scan(struct context *ctx, FILE *fp) {
 				scan_ctx->err_type = PAREN_MISM;
 				scan_err(scan_ctx);
 			}
-			scan_ctx->possible = TK_OP | TK_RPAREN;
+			scan_ctx->possible = TK_OP | TK_RPAREN | TK_TEXT;
 			scan_ctx->scan_state = TK_RPAREN;
 			vector_push_back(scan_ctx->buff, &c);
 		} else {
