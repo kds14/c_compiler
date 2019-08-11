@@ -32,15 +32,27 @@ void scan_err(struct scan_ctx* ctx) {
 	exit(0);
 }
 
+void print_token(struct token_node *t) {
+	if (t->type == TK_INT) {
+		printf("%d", t->int_val);
+	} else if ((t->type & (TK_OP | TK_PARENS))) {
+		printf("%c", t->char_val);
+	} else if (t->type == TK_TEXT) {
+		printf("%s", t->str_val);
+	}
+}
+
 void print_tokens(struct vector *tokens) {
 	vector_reset(tokens);
 	struct token_node *t = NULL;
+	int start = 1;
 	while ((t = vector_next(tokens)) != NULL) {
-		if (t->type == TK_INT) {
-			printf("%d, ", t->int_val);
-		} else if ((t->type & (TK_OP | TK_PARENS))) {
-			printf("%c, ", t->char_val);
+		if (start) {
+			start = 0;
+		} else {
+			printf(", ");
 		}
+		print_token(t);
 	}
 }
 
@@ -50,16 +62,22 @@ void commit_token(struct scan_ctx *scan_ctx) {
 	char* val;
 	switch (scan_ctx->scan_state) {
 		case TK_INT:
-			val = calloc(1, len);
+			val = calloc(len, sizeof(char));
 			memcpy(val, scan_ctx->buff->buff, len);
-			scan_ctx->next->int_val = atoi(val);	
+			scan_ctx->next->int_val = atoi(val);
 			free(val);
 			break;
 		case TK_LPAREN:
 		case TK_RPAREN:
 		case TK_OP:
 			scan_ctx->next->char_val =
-					((char *)scan_ctx->buff->buff)[0];	
+				((char *)scan_ctx->buff->buff)[0];	
+			break;
+		case TK_TEXT:
+			val = calloc(len + 1, sizeof(char));
+			memcpy(val, scan_ctx->buff->buff, len);
+			scan_ctx->next->str_val = val;
+			scan_ctx->next->str_size = len;
 			break;
 		case TK_NON:
 		default:
@@ -76,19 +94,30 @@ int scan(struct context *ctx, FILE *fp) {
 	scan_ctx->next = calloc(1, sizeof(struct token_node));
 	vector_init(&scan_ctx->tokens, sizeof(struct token_node), 100);
 	vector_init(&scan_ctx->buff, sizeof(char), 100);
-	scan_ctx->possible = 0xFFFFFFFF;
+	scan_ctx->possible = TK_ALL;
 	scan_ctx->scan_state = TK_NON;
 
 	while ((c = getc(fp)) != EOF) {
 		scan_ctx->last_char = c;
-		if (c >= '0' && c <= '9') {
-			if (!(scan_ctx->possible & TK_INT))
+		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+			if (!(scan_ctx->possible & TK_TEXT))
 				scan_err(scan_ctx);
-			if (scan_ctx->scan_state != TK_INT) {
+			if (scan_ctx->scan_state != TK_TEXT) {
 				commit_token(scan_ctx);
 			}
-			scan_ctx->possible = TK_INT | TK_OP | TK_PARENS;
-			scan_ctx->scan_state = TK_INT;
+			scan_ctx->possible = TK_TEXT | TK_INT;
+			scan_ctx->scan_state = TK_TEXT;
+			vector_push_back(scan_ctx->buff, &c);
+		} else if (c >= '0' && c <= '9') {
+			if (!(scan_ctx->possible & TK_INT))
+				scan_err(scan_ctx);
+			if (!(scan_ctx->scan_state & (TK_INT | TK_TEXT))) {
+				commit_token(scan_ctx);
+			}
+			if (scan_ctx->scan_state != TK_TEXT) {
+				scan_ctx->possible = TK_INT | TK_OP | TK_PARENS;
+				scan_ctx->scan_state = TK_INT;
+			}
 			vector_push_back(scan_ctx->buff, &c);
 		} else if (c == '+' || c == '-' || c == '*' || c == '/') {
 			if (!(scan_ctx->possible & TK_OP))
@@ -127,7 +156,7 @@ int scan(struct context *ctx, FILE *fp) {
 				commit_token(scan_ctx);
 			}
 			scan_ctx->scan_state = TK_NON;
-			scan_ctx->possible = 0xFF;
+			scan_ctx->possible = TK_ALL;
 		}
 		scan_ctx->char_count++;
 	}

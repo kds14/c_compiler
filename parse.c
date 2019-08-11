@@ -39,7 +39,10 @@ void print_ast(struct ast_node *ast, int indent) {
 }
 
 void err_abort(struct parse_ctx *ctx) {
-	printf("ERROR next to\n");
+	struct token_node* node = vector_peek(ctx->tokens);
+	printf("Parse error next token: ");
+	print_token(node);
+	printf("\n");
 	exit(0);
 }
 
