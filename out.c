@@ -146,6 +146,9 @@ void output_expr(struct out_ctx *ctx, struct ast_node *node) {
 	push(ctx);
 }
 
+char* tmp_start = ".LC0:\n.string \"%d\\n\"\n.globl main\n.type main, @function\nmain:\npushq %rbp\nmovq %rsp,%rbp\n";
+char* tmp_end = "movl %eax,%esi\nmovl $.LC0,%edi\nmovl $0,%eax\ncall printf\nmovl $0,%eax\nleave\nret\n";
+
 int out(struct context *ctx) {
 	struct out_ctx *out_ctx = calloc(1, sizeof(struct out_ctx));
 	out_ctx->str = stdout;
@@ -153,7 +156,9 @@ int out(struct context *ctx) {
 	struct ast_node* node;
 	out_ctx->syms = ctx->syms;
 	out_ctx->stack = 0;
+	printf("%s", tmp_start);
 	while ((node = vector_next(ctx->asts)) != NULL) {
 		output_expr(out_ctx, node);
 	}
+	printf("%s", tmp_end);
 }
