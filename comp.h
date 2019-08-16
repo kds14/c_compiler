@@ -6,14 +6,15 @@
 #include <stdint.h>
 #include <string.h>
 
-#define PAR_DBG
+//#define PAR_DBG
+//#define SCAN_DBG
 
 enum token {TK_NON = 0x0, TK_IDENT = 0x1, TK_KEYW = 0x2, TK_INT = 0x4,
 			TK_FLOAT = 0x8, TK_CHAR = 0x10, TK_STRING = 0x20,
 			TK_OP = 0x40, TK_PUNC = 0x80, TK_LPAREN = 0x100,
 			TK_RPAREN = 0x200, TK_PARENS = 0x300, TK_TYPE = 0x400,
 			TK_ASS = 0x800, TK_TEXT = (TK_IDENT | TK_KEYW | TK_TYPE),
-			TK_ALL = 0xFFFFFFFF};
+			TK_SEMICOL = 0x1000, TK_ALL = 0xFFFFFFFF};
 
 enum ast_type { AST_OP, AST_INT, AST_ASS, AST_VAR };
 
@@ -40,7 +41,7 @@ struct token_node {
 	struct node *next;
 };
 
-void print_token(struct token_node *t);
+void token_str(struct token_node *t, char* str);
 
 struct ast_node {
 	union {
@@ -64,11 +65,6 @@ struct ast_node {
 	struct ast_node *right;
 };
 
-
-struct context {
-	struct vector* tokens;
-	struct ast_node* ast_root;
-};
 
 struct vector {
 	void* buff;
@@ -108,7 +104,24 @@ void ht_destroy(struct hashtable *ht);
 void ht_insert(struct hashtable *ht, char* key, void* val);
 void* ht_find(struct hashtable *ht, char* key);
 
+struct context {
+	struct vector *tokens;
+	struct vector *asts;
+	struct hashtable *syms;
+};
+
+struct sym_ent {
+	union {
+		uint64_t addr;
+		uint64_t stack;
+	};
+	int on_stack;
+	enum var_type type;
+	char* name;
+};
+
 int scan(struct context *ctx, FILE *fp);
 int parse(struct context *ctx);
 int out(struct context *ctx);
+
 #endif

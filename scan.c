@@ -33,12 +33,19 @@ void scan_err(struct scan_ctx* ctx) {
 }
 
 void print_token(struct token_node *t) {
+	char* str = calloc(1000, sizeof(char));
+	token_str(t, str);
+	printf("%s", str);
+	free(str);
+}
+
+void token_str(struct token_node *t, char* str) {
 	if (t->type == TK_INT) {
-		printf("%d", t->int_val);
-	} else if ((t->type & (TK_OP | TK_PARENS | TK_ASS))) {
-		printf("%c", t->char_val);
+		sprintf(str, "%d", t->int_val);
+	} else if ((t->type & (TK_OP | TK_PARENS | TK_ASS | TK_SEMICOL))) {
+		sprintf(str, "%c", t->char_val);
 	} else if (t->type == TK_TEXT) {
-		printf("%s", t->str_val);
+		sprintf(str, "%s", t->str_val);
 	}
 }
 
@@ -54,6 +61,7 @@ void print_tokens(struct vector *tokens) {
 		}
 		print_token(t);
 	}
+	puts("");
 }
 
 void commit_token(struct scan_ctx *scan_ctx) {
@@ -70,6 +78,7 @@ void commit_token(struct scan_ctx *scan_ctx) {
 		case TK_LPAREN:
 		case TK_RPAREN:
 		case TK_OP:
+		case TK_SEMICOL:
 		case TK_ASS:
 			scan_ctx->next->char_val = ((char *)scan_ctx->buff->buff)[0];	
 			break;
@@ -119,14 +128,13 @@ int scan(struct context *ctx, FILE *fp) {
 				scan_ctx->scan_state = TK_INT;
 			}
 			vector_push_back(scan_ctx->buff, &c);
-		} else if (c == '+' || c == '-' || c == '*' || c == '/') {
-			if (!(scan_ctx->possible & TK_OP))
-				scan_err(scan_ctx);
+		} else if (c == '+' || c == '-' || c == '*' || c == '/'
+					|| c == ';') {
 			if (scan_ctx->scan_state != TK_NON) {
 				commit_token(scan_ctx);
 			}
 			scan_ctx->possible = TK_INT | TK_LPAREN | TK_TEXT;
-			scan_ctx->scan_state = TK_OP;
+			scan_ctx->scan_state = c == ';' ? TK_SEMICOL : TK_OP;
 			vector_push_back(scan_ctx->buff, &c);
 		} else if (c == '=') {
 			if (!(scan_ctx->possible & TK_ASS))
@@ -177,7 +185,9 @@ int scan(struct context *ctx, FILE *fp) {
 		scan_ctx->err_type = PAREN_OPEN;
 		scan_err(scan_ctx);
 	}
+#ifdef SCAN_DBG
 	print_tokens(scan_ctx->tokens);
+#endif
 	ctx->tokens = scan_ctx->tokens;
 	return 0;
 }
