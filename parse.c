@@ -1,12 +1,12 @@
 #include "comp.h"
-// TODO : STACK POSITION
+
 /*
  * GRAMMAR USED
  * Expr ::= Term Expr'
  * Expr' ::= + Term Expr' | - Term Expr' | ϵ
  * Term ::= + Factor Term'
  * Term' ::= * Factor Term' | / Factor Term' | ϵ
- * Factor ::= (Expr) | NUM 
+ * Factor ::= (Expr) | NUM | VAR
  */
 
 
@@ -18,13 +18,17 @@ struct parse_ctx {
 	struct vector *tokens;
 	char **types;
 	size_t types_size;
+	char **kws;
+	size_t kws_size;
 	struct hashtable *syms;
 	enum parse_err err;
 	char* err_ex;
+	int braces;
 };
 
 struct ast_node *expr(struct parse_ctx *ctx);
 enum var_type get_type(struct parse_ctx* ctx, struct token_node *node);
+struct ast_node *line(struct parse_ctx *ctx);
 
 int get_ast_height(struct ast_node *ast) {
 	if (ast == NULL)
@@ -65,6 +69,9 @@ void err_abort(struct parse_ctx *ctx) {
 		case PE_VARB4ASS:
 			printf(" (Variable %s used before assignment) ", ctx->err_ex);
 			break;
+		default:
+			printf(" (Default) ");
+			break;
 	}
 	printf("\n");
 	exit(0);
@@ -101,7 +108,13 @@ struct ast_node *make_ast_node(struct token_node* node,
 int consume(struct parse_ctx *ctx, uint64_t val) {
 	struct token_node* node = vector_peek(ctx->tokens);
 	if (node == NULL)
-		return -1;
+		err_abort(ctx);
+#ifdef PAR_DBG
+	char *str = calloc(1024, sizeof(char));
+	token_str(node, str);
+	printf("CONSUME %s\n", str);
+	free(str);
+#endif
 	if (node->type & val) {
 		vector_next(ctx->tokens);
 		return 0;
@@ -201,37 +214,116 @@ enum var_type get_type(struct parse_ctx* ctx, struct token_node *node) {
 	return 0;
 }
 
+enum keyword get_kw(struct parse_ctx* ctx, struct token_node *node) {
+	if (node->type != TK_TEXT)
+		return 0;
+	for (int i = 0; i < ctx->kws_size; ++i) {
+		if (!strcmp(ctx->kws[i], node->str_val)) {
+			return i + 1;
+		}
+	}
+	return 0;
+}
+
+void func_params(struct parse_ctx *ctx, struct hashtable *params) {
+	struct token_node *next, *next2;
+	next = vector_peek(ctx->tokens);
+	enum var_type type;
+	while (next->type != TK_RPAREN) {
+		consume(ctx, TK_TEXT);
+		type = get_type(ctx, next);
+		if (!type)
+			err_abort(ctx);
+		next2 = vector_peek(ctx->tokens);
+		consume(ctx, TK_TEXT);
+		consume(ctx, TK_COMMA);
+		struct sym_ent *se = calloc(1, sizeof(struct sym_ent));
+		se->type = type;
+		se->name = next2->str_val;
+		ht_insert(params, se->name, se);
+	}
+	consume(ctx, TK_RPAREN);
+}
+
+struct ast_node *func(struct parse_ctx *ctx, enum var_type ret_type,
+		char* ident) {
+	struct ast_node *res;
+	struct token_node *next = vector_peek(ctx->tokens);
+	res = make_ast_var_node(ret_type, ident);
+	res->type = AST_FUNC;
+	vector_init(&res->many, sizeof(struct ast_node), 100);
+	ctx->braces = 1;
+	while (next->type != TK_RBRACE || ctx->braces > 1) {
+		vector_push_back(res->many, line(ctx));
+		next = vector_peek(ctx->tokens);
+	}
+	return res;
+}
+
 struct ast_node *line(struct parse_ctx *ctx) {
 	struct token_node *next, *next2, *next3;
 	struct ast_node *res, *var;
 	next = vector_peek(ctx->tokens);
 	res = NULL;
+	int semicol = 1;
 	if (next == NULL)
 		return NULL;
 	enum var_type type = get_type(ctx, next);
+	enum keyword kw = get_kw(ctx, next);
 	if (type) {
-		if (consume(ctx, TK_TEXT))
-			err_abort(ctx);
+		consume(ctx, TK_TEXT);
 		next2 = vector_peek(ctx->tokens);
-		if (consume(ctx, TK_TEXT))
-			err_abort(ctx);
+		consume(ctx, TK_TEXT);
 		next3 = vector_peek(ctx->tokens);
-		if (consume(ctx, TK_ASS))
-			err_abort(ctx);
-		char* name = next2->str_val;
-		var = make_ast_var_node(type, name);
-		if (ht_find(ctx->syms, name)) {
-			ctx->err = PE_DUPE_VAR;
-			err_abort(ctx);
+		if (next3->type == TK_ASS) {
+			consume(ctx, TK_ASS);
+			char* name = next2->str_val;
+			if (ht_find(ctx->syms, name)) {
+				ctx->err = PE_DUPE_VAR;
+				err_abort(ctx);
+			}
+			var = make_ast_var_node(type, name);
+			struct sym_ent *se = calloc(1, sizeof(struct sym_ent));
+			se->type = type;
+			se->name = name;
+			ht_insert(ctx->syms, name, se);
+			res = make_ast_node(next3, var, expr(ctx));
+		} else if (next3->type == TK_LPAREN) {
+			consume(ctx, TK_LPAREN);
+			char* name = next2->str_val;
+			var = make_ast_var_node(type, name);
+			struct sym_ent *se = calloc(1, sizeof(struct sym_ent));
+			se->ret_type = type;
+			se->type = AST_FUNC;
+			se->name = name;
+			ht_init(&se->params, 10, 0.75f);
+			func_params(ctx, se->params);
+			ht_insert(ctx->syms, name, se);
+			next3 = vector_peek(ctx->tokens);
+			struct sym_ent *node = ht_find(ctx->syms, name);
+			if (next3->type == TK_LBRACE) {
+				semicol = 0;
+				if (node != NULL && node->defined) {
+					ctx->err = PE_DUPE_VAR;
+					err_abort(ctx);
+				}
+				consume(ctx, TK_LBRACE);
+				res = func(ctx, type, name);
+				consume(ctx, TK_RBRACE);
+				ctx->braces = 0;
+			} else if (node != NULL) {
+				ctx->err = PE_DUPE_VAR;
+				err_abort(ctx);
+			}
 		}
-		struct sym_ent *se = calloc(1, sizeof(struct sym_ent));
-		se->type = type;
-		se->name = name;
-		ht_insert(ctx->syms, name, se);
-		res = make_ast_node(next3, var, expr(ctx));
+	} else if (kw) {
+		if (kw == KW_RET) {
+			consume(ctx, TK_TEXT);
+		}
+		res = expr(ctx);
 	}
-	if (consume(ctx, TK_SEMICOL))
-		err_abort(ctx);
+	if (semicol)
+		consume(ctx, TK_SEMICOL);
 	return res;
 }
 
@@ -242,6 +334,9 @@ int parse(struct context *ctx) {
 	parse_ctx->types_size = 1;
 	parse_ctx->types = calloc(parse_ctx->types_size, sizeof(char *));
 	parse_ctx->types[0] = "int";
+	parse_ctx->kws_size = 1;
+	parse_ctx->kws = calloc(parse_ctx->types_size, sizeof(char *));
+	parse_ctx->kws[0] = "return";
 
 	ht_init(&parse_ctx->syms, 100, 0.75f);
 	vector_init(&ctx->asts, sizeof(struct ast_node), 100);

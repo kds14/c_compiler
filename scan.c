@@ -76,6 +76,8 @@ void commit_token(struct scan_ctx *scan_ctx) {
 			break;
 		case TK_LPAREN:
 		case TK_RPAREN:
+		case TK_LBRACE:
+		case TK_RBRACE:
 		case TK_OP:
 		case TK_SEMICOL:
 		case TK_ASS:
@@ -103,7 +105,8 @@ void handle_single(struct scan_ctx* scan_ctx, char c) {
 	if (c == '+' || c == '-' || c == '*' || c == '/') {
 		scan_ctx->scan_state = TK_OP;
 		vector_push_back(scan_ctx->buff, &c);
-	} else if (c == ';' || c == '(' || c == ')' || c == '=') {
+	} else if (c == ';' || c == '(' || c == ')' || c == '='
+				|| c == ',' || c == '}' || c == '{') {
 		scan_ctx->scan_state = (enum token)c;
 		if (c == '(')
 			scan_ctx->parens++;

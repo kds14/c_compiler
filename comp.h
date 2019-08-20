@@ -11,11 +11,13 @@
 
 enum token {TK_NON = 0x0, TK_TEXT = 0x1, TK_SEMICOL = 0x3B,
 			TK_INT = 0x4, TK_OP = 0x40, TK_LPAREN = 0x28,
-			TK_RPAREN = 0x29, TK_ASS = 0x3D, TK_ALL = 0xFFFFFFFF};
+			TK_RPAREN = 0x29, TK_ASS = 0x3D, TK_LBRACE = 0x7B,
+			TK_RBRACE = 0x7D, TK_ALL = 0xFFFFFFFF, TK_COMMA = 0x2C};
 
-enum ast_type { AST_OP, AST_INT, AST_ASS, AST_VAR };
+enum ast_type { AST_OP, AST_INT, AST_ASS, AST_VAR, AST_FUNC };
 
-enum var_type { T_NON = 0, T_INT };
+enum var_type { T_NON = 0, T_INT = 1, T_FUNC };
+enum keyword { KW_NON = 0, KW_RET = 1 };
 
 struct token_node {
 	union {
@@ -58,8 +60,15 @@ struct ast_node {
 		};
 	};
 	enum ast_type type;
-	struct ast_node *left;
-	struct ast_node *right;
+	union {
+		struct {
+			struct ast_node *left;
+			struct ast_node *right;
+		};
+		struct {
+			struct vector *many;
+		};
+	};
 };
 
 
@@ -112,6 +121,12 @@ struct sym_ent {
 		uint64_t addr;
 		uint64_t stack;
 	};
+
+	// fuction fields
+	enum var_type ret_type;
+	struct hashtable *params;
+	int defined;
+
 	int on_stack;
 	enum var_type type;
 	char* name;

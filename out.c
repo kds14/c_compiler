@@ -6,6 +6,7 @@ enum out_err { OE_NON=0, OE_NIMP, OE_MISS_SYM, OE_ASS_GEN, OE_OP_GEN};
 
 struct out_ctx {
 	FILE* str;
+
 	struct ast_node *last;
 	enum out_err err;
 	struct hashtable *syms;
@@ -114,13 +115,26 @@ void output_op(struct out_ctx *ctx, struct ast_node *node) {
 			out2str(ctx, "imul\t%rcx, %rax\n");
 			break;
 		case '/':
-			out2str(ctx, "cqto\nidivq\t\%rcx\n");
+			out2str(ctx, "cqto\nidivq\t%rcx\n");
 			break;
 		default:
 			ctx->err = OE_OP_GEN;
 			out_err(ctx);
 			break;
 	}
+}
+
+void output_func(struct out_ctx *ctx, struct ast_node *node) {
+	fprintf(ctx->str, "%sPRE:\n.globl %s\n.type %s, @function\n%s:\n",
+			node->ident, node->ident, node->ident, node->ident);
+	out2str(ctx, "pushq %rbp\n");
+	struct ast_node *next;
+	while ((next = vector_next(node->many)) != NULL) {
+		output_expr(ctx, next);
+	}
+	out2str(ctx, "popq %rax\npopq %rbp\nret\n");
+	fprintf(ctx->str, "%sPOST:\n.size %s, .-%s\n.section .rodata\n", node->ident,
+			node->ident, node->ident);
 }
 
 void output_expr(struct out_ctx *ctx, struct ast_node *node) {
@@ -138,12 +152,16 @@ void output_expr(struct out_ctx *ctx, struct ast_node *node) {
 		case AST_VAR:
 			output_var(ctx, node);
 			break;
+		case AST_FUNC:
+			output_func(ctx, node);
+			break;
 		default:
 			ctx->err = OE_NIMP;
 			out_err(ctx);
 			break;
 	}
-	push(ctx);
+	if (node->type != AST_FUNC)
+		push(ctx);
 }
 
 char* tmp_start = ".LC0:\n.string \"%d\\n\"\n.globl main\n.type main, @function\nmain:\npushq %rbp\nmovq %rsp,%rbp\n";
@@ -151,14 +169,13 @@ char* tmp_end = "movl %eax,%esi\nmovl $.LC0,%edi\nmovl $0,%eax\ncall printf\nmov
 
 int out(struct context *ctx) {
 	struct out_ctx *out_ctx = calloc(1, sizeof(struct out_ctx));
-	out_ctx->str = stdout;
 	vector_reset(ctx->asts);
 	struct ast_node* node;
+	out_ctx->str = stdout;
 	out_ctx->syms = ctx->syms;
 	out_ctx->stack = 0;
-	printf("%s", tmp_start);
+	fprintf(out_ctx->str, ".file\t\"main.c\"\n");
 	while ((node = vector_next(ctx->asts)) != NULL) {
 		output_expr(out_ctx, node);
 	}
-	printf("%s", tmp_end);
 }
