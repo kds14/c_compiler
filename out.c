@@ -6,7 +6,6 @@ enum out_err { OE_NON=0, OE_NIMP, OE_MISS_SYM, OE_ASS_GEN, OE_OP_GEN};
 
 struct out_ctx {
 	FILE* str;
-
 	struct ast_node *last;
 	enum out_err err;
 	struct hashtable *syms;
@@ -127,14 +126,18 @@ void output_op(struct out_ctx *ctx, struct ast_node *node) {
 void output_func(struct out_ctx *ctx, struct ast_node *node) {
 	fprintf(ctx->str, "%sPRE:\n.globl %s\n.type %s, @function\n%s:\n",
 			node->ident, node->ident, node->ident, node->ident);
-	out2str(ctx, "pushq %rbp\n");
+	out2str(ctx, "pushq\t%rbp\nmovq\t%rsp, %rbp\n");
 	struct ast_node *next;
 	while ((next = vector_next(node->many)) != NULL) {
 		output_expr(ctx, next);
 	}
-	out2str(ctx, "popq %rax\npopq %rbp\nret\n");
-	fprintf(ctx->str, "%sPOST:\n.size %s, .-%s\n.section .rodata\n", node->ident,
-			node->ident, node->ident);
+	out2str(ctx, "popq\t%rax\nmovq\t%rbp,%rsp\npopq\t%rbp\nret\n");
+	fprintf(ctx->str, "%sPOST:\n.size %s, .-%s\n.section .rodata\n",
+			node->ident, node->ident, node->ident);
+}
+
+void output_call(struct out_ctx *ctx, struct ast_node *node) {
+	fprintf(ctx->str, "call\t%s\n", node->ident);
 }
 
 void output_expr(struct out_ctx *ctx, struct ast_node *node) {
@@ -154,6 +157,9 @@ void output_expr(struct out_ctx *ctx, struct ast_node *node) {
 			break;
 		case AST_FUNC:
 			output_func(ctx, node);
+			break;
+		case AST_CALL:
+			output_call(ctx, node);
 			break;
 		default:
 			ctx->err = OE_NIMP;

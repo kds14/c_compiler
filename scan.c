@@ -12,6 +12,7 @@ struct scan_ctx {
 	uint64_t char_count;
 	uint64_t parens;
 	enum scan_err err_type;
+	size_t line;
 };
 
 void scan_err(struct scan_ctx* ctx) {
@@ -94,6 +95,7 @@ void commit_token(struct scan_ctx *scan_ctx) {
 			return;
 	}
 	scan_ctx->next->type = scan_ctx->scan_state;
+	scan_ctx->next->line = scan_ctx->line;
 	vector_push_back(scan_ctx->tokens, scan_ctx->next);
 	scan_ctx->next = calloc(1, sizeof(struct token_node));
 }
@@ -116,6 +118,8 @@ void handle_single(struct scan_ctx* scan_ctx, char c) {
 		}
 		vector_push_back(scan_ctx->buff, &c);
 	} else {
+		if (c == '\n')
+			scan_ctx->line++;
 		scan_ctx->scan_state = TK_NON;
 	}
 }
@@ -124,6 +128,7 @@ int scan(struct context *ctx, FILE *fp) {
 	char c;
 	struct scan_ctx* scan_ctx = calloc(1, sizeof(struct scan_ctx));
 	scan_ctx->next = calloc(1, sizeof(struct token_node));
+	scan_ctx->line = 1;
 	vector_init(&scan_ctx->tokens, sizeof(struct token_node), 100);
 	vector_init(&scan_ctx->buff, sizeof(char), 100);
 	scan_ctx->scan_state = TK_NON;

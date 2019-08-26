@@ -14,9 +14,10 @@ enum token {TK_NON = 0x0, TK_TEXT = 0x1, TK_SEMICOL = 0x3B,
 			TK_RPAREN = 0x29, TK_ASS = 0x3D, TK_LBRACE = 0x7B,
 			TK_RBRACE = 0x7D, TK_ALL = 0xFFFFFFFF, TK_COMMA = 0x2C};
 
-enum ast_type { AST_OP, AST_INT, AST_ASS, AST_VAR, AST_FUNC };
+enum ast_type { AST_OP, AST_INT, AST_ASS, AST_VAR, AST_FUNC,
+			AST_CALL };
 
-enum var_type { T_NON = 0, T_INT = 1, T_FUNC };
+enum var_type { T_NON = 0, T_INT = 1};
 enum keyword { KW_NON = 0, KW_RET = 1 };
 
 struct token_node {
@@ -36,6 +37,7 @@ struct token_node {
 			int int_val; 
 		};
 	};
+	size_t line;
 	enum token type;
 	struct node *next;
 };
@@ -126,6 +128,7 @@ struct sym_ent {
 	enum var_type ret_type;
 	struct hashtable *params;
 	int defined;
+	int func;
 
 	int on_stack;
 	enum var_type type;
