@@ -11,7 +11,7 @@ void ht_init(struct hashtable **ht, size_t buckets, float bound) {
 	*ht = h;
 }
 
-struct ht_node* ht_next(struct hashtable *ht) {
+struct ht_node *ht_next(struct hashtable *ht) {
 	struct ht_node* res;
 	while (ht->it_bucket < ht->buckets) {
 		res = ht->next;
@@ -85,7 +85,7 @@ void ht_insert(struct hashtable *ht, char* key, void* val) {
 	ht->count += 1;
 }
 
-void* ht_find(struct hashtable *ht, char* key) {
+void *ht_find(struct hashtable *ht, char* key) {
 	struct ht_node *node = ht->eles[ht_hash(ht, key)];
 	int it = 0;
 	while (node != NULL) {

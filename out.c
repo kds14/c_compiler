@@ -161,12 +161,14 @@ void output_expr(struct out_ctx *ctx, struct ast_node *node) {
 		case AST_CALL:
 			output_call(ctx, node);
 			break;
+		case AST_SKIP:
+			break;
 		default:
 			ctx->err = OE_NIMP;
 			out_err(ctx);
 			break;
 	}
-	if (node->type != AST_FUNC)
+	if (node->type != AST_FUNC && node->type != AST_SKIP)
 		push(ctx);
 }
 

@@ -15,7 +15,7 @@ enum token {TK_NON = 0x0, TK_TEXT = 0x1, TK_SEMICOL = 0x3B,
 			TK_RBRACE = 0x7D, TK_ALL = 0xFFFFFFFF, TK_COMMA = 0x2C};
 
 enum ast_type { AST_OP, AST_INT, AST_ASS, AST_VAR, AST_FUNC,
-			AST_CALL };
+			AST_CALL, AST_SKIP};
 
 enum var_type { T_NON = 0, T_INT = 1};
 enum keyword { KW_NON = 0, KW_RET = 1 };

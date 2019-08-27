@@ -13,7 +13,7 @@
 enum parse_exp {P_NON = 0x0, P_IDENT = 0x1};
 
 enum parse_err {PE_NON = 0, PE_DUPE_VAR, PE_CONS, PE_VARB4ASS,
-				PE_SYMDNE, PE_NOTFUNC};
+				PE_SYMDNE, PE_NOTFUNC, PE_PARAMMISS};
 
 struct parse_ctx {
 	struct vector *tokens;
@@ -32,6 +32,30 @@ struct ast_node *expr(struct parse_ctx *ctx);
 enum var_type get_type(struct parse_ctx* ctx, struct token_node *node);
 struct ast_node *line(struct parse_ctx *ctx);
 struct ast_node *func_call(struct parse_ctx *ctx, char* ident);
+int args_cmp(struct hashtable *params, struct vector *args);
+int params_cmp(struct hashtable *p0, struct hashtable *p1);
+
+/*
+ * Compares parameters in form of a struct sym_ent to the args
+ * in the form of struct ast_node
+ */
+int args_cmp(struct hashtable *params, struct vector *args) {
+	if (params->count != args->len)
+		return -1;
+	return 0;
+}
+
+int params_cmp(struct hashtable *p0, struct hashtable *p1) {
+	if (p0->count != p1->count)
+		return -1;
+	struct ht_node* node;
+	ht_reset(p0);
+	while ((node = ht_next(p0)) != NULL) {
+		if (ht_find(p1, node->key) == NULL)
+			return -1;
+	}
+	return 0;
+}
 
 int get_ast_height(struct ast_node *ast) {
 	if (ast == NULL)
@@ -78,8 +102,11 @@ void err_abort(struct parse_ctx *ctx) {
 		case PE_NOTFUNC:
 			printf(" (Symbol %s not a function) ", ctx->err_ex);
 			break;
+		case PE_PARAMMISS:
+			printf(" (Parameter mismatch) ");
+			break;
 		default:
-			printf(" (Default) ");
+			printf(" (%s) ", ctx->err_ex);
 			break;
 	}
 	printf("LINE: %lu\n", node->line);
@@ -103,6 +130,12 @@ struct ast_node *make_ast_var_node(enum var_type type, char* ident) {
 	res->type = AST_VAR;
 	res->left = NULL;
 	res->right = NULL;
+	return res;
+}
+
+struct ast_node *make_ast_skip_node() {
+	struct ast_node* res = calloc(1, sizeof(struct ast_node));
+	res->type = AST_SKIP;
 	return res;
 }
 
@@ -251,6 +284,25 @@ enum keyword get_kw(struct parse_ctx* ctx, struct token_node *node) {
 	return 0;
 }
 
+void func_args(struct parse_ctx *ctx, struct vector *args) {
+	struct token_node *next, *next2;
+	next = vector_peek(ctx->tokens);
+	enum var_type type;
+	while (next->type != TK_RPAREN) {
+		struct ast_node *exp = expr(ctx);
+		vector_push_back(args, exp);
+		next2 = vector_peek(ctx->tokens);
+		if (next2->type == TK_COMMA) {
+			consume(ctx, TK_COMMA);
+		} else if (next2->type != TK_RPAREN) {
+			ctx->err_ex = "Expecting right parenthesis or comma";
+			err_abort(ctx);
+		}
+		next = vector_peek(ctx->tokens);
+	}
+	consume(ctx, TK_RPAREN);
+}
+
 void func_params(struct parse_ctx *ctx, struct hashtable *params) {
 	struct token_node *next, *next2;
 	next = vector_peek(ctx->tokens);
@@ -290,6 +342,10 @@ struct ast_node *func_call(struct parse_ctx *ctx, char* ident) {
 		if (next->type == TK_COMMA)
 			consume(ctx, TK_COMMA);
 		next = vector_peek(ctx->tokens);
+	}
+	if (args_cmp(se->params, res->many)) {
+		ctx->err = PE_PARAMMISS;
+		err_abort(ctx);
 	}
 	consume(ctx, TK_RPAREN);
 	return res;
@@ -341,20 +397,36 @@ struct ast_node *line(struct parse_ctx *ctx) {
 		} else if (next3->type == TK_LPAREN) {
 			consume(ctx, TK_LPAREN);
 			char* name = next2->str_val;
-			var = make_ast_var_node(type, name);
-			struct sym_ent *se = calloc(1, sizeof(struct sym_ent));
-			se->ret_type = type;
-			se->type = type;
-			se->name = name;
-			se->func = 1;
-			ht_init(&se->params, 10, 0.75f);
-			func_params(ctx, se->params);
-			ht_insert(ctx->syms, name, se);
+			struct sym_ent *node;
+			struct hashtable *pht;
+			int just_declared = 0;
+			if ((node = ht_find(ctx->syms, name)) == NULL) {
+				// make new symbol table entry
+				var = make_ast_var_node(type, name);
+				struct sym_ent *se = calloc(1, sizeof(struct sym_ent));
+				se->ret_type = type;
+				se->type = type;
+				se->name = name;
+				se->func = 1;
+				ht_init(&se->params, 10, 0.75f);
+				func_params(ctx, se->params);
+				ht_insert(ctx->syms, name, se);
+				node = ht_find(ctx->syms, name);
+				just_declared = 1;
+			} else {
+				// already declared, check params match
+				pht = calloc(1, sizeof(struct hashtable));
+				func_params(ctx, pht);
+				if (params_cmp(node->params, pht)) {
+					ctx->err = PE_PARAMMISS;
+					err_abort(ctx);
+				}
+				free(pht);
+			}
 			next3 = vector_peek(ctx->tokens);
-			struct sym_ent *node = ht_find(ctx->syms, name);
 			if (next3->type == TK_LBRACE) {
 				semicol = 0;
-				if (node != NULL && node->defined) {
+				if (node != NULL && node->defined && !just_declared) {
 					ctx->err = PE_DUPE_VAR;
 					err_abort(ctx);
 				}
@@ -362,10 +434,12 @@ struct ast_node *line(struct parse_ctx *ctx) {
 				res = func(ctx, type, name);
 				consume(ctx, TK_RBRACE);
 				ctx->braces = 0;
-			} else if (node != NULL) {
+			} else if (node != NULL && !just_declared) {
 				ctx->err = PE_DUPE_VAR;
 				err_abort(ctx);
 			}
+			if (res == NULL)
+				res = make_ast_skip_node();
 		}
 	} else if (kw) {
 		if (kw == KW_RET) {
